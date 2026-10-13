@@ -1,0 +1,83 @@
+# ==============================================================================
+# GENERAL & IDE
+# ==============================================================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==============================================================================
+# PROTOC / GENERATED STUBS
+# ==============================================================================
+# Ignore generated proto outputs since they are built via Makefile/CI
+gen/
+*.pb.go
+*_grpc.pb.go
+
+# ==============================================================================
+# GO (Ingestion Service & Modules)
+# ==============================================================================
+bin/
+vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+go.work
+
+# ==============================================================================
+# PYTHON (Generator & Signal Engine)
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ==============================================================================
+# JAVA / KAFKA STREAMS (Stream Processor)
+# ==============================================================================
+target/
+*.class
+.gradle/
+build/
+out/
+.mvn/
+hs_err_pid*
+
+# ==============================================================================
+# INFRASTRUCTURE & VAGRANT
+# ==============================================================================
+infra/.vagrant/
+*.vdi
+*.vmdk
+*.ova
+*.iso
+ansible.log
