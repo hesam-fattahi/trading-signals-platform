@@ -1,0 +1,220 @@
+- name: Disable swap immediately
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+  changed_when: false
+
+- name: Disable swap permanently
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#\s]+\s+[^#\s]+\s+swap\s+.*)$'
+    replace: '# \1'
+
+- name: Load required kernel modules
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Ensure Kubernetes kernel modules load on boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure Kubernetes networking sysctls
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - key: net.bridge.bridge-nf-call-iptables
+      value: "1"
+    - key: net.bridge.bridge-nf-call-ip6tables
+      value: "1"
+    - key: net.ipv4.ip_forward
+      value: "1"
+
+- name: Install required OS packages
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - python3-kubernetes
+    state: present
+    update_cache: true
+
+- name: Create APT keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Install containerd
+  ansible.builtin.apt:
+    name: containerd
+    state: present
+
+- name: Create containerd configuration directory
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: "0755"
+
+- name: Configure containerd
+  ansible.builtin.template:
+    src: containerd-config.toml.j2
+    dest: /etc/containerd/config.toml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart containerd
+
+- name: Ensure containerd is enabled and running
+  ansible.builtin.systemd:
+    name: containerd
+    state: started
+    enabled: true
+
+- name: Install UFW
+  ansible.builtin.apt:
+    name:
+      - ufw
+    state: present
+    update_cache: true
+
+- name: Find interface carrying the node's private address
+  ansible.builtin.shell: |
+    ip -o -4 addr show | awk '$4 ~ /^{{ ansible_host }}\// { print $2; exit }'
+  register: private_network_interface
+  changed_when: false
+  failed_when: >-
+    private_network_interface.rc != 0 or
+    private_network_interface.stdout | trim == ""
+
+- name: Find and verify the VirtualBox NAT interface
+  ansible.builtin.shell: |
+    set -eu
+    route="$(ip -o -4 route get 10.0.2.2)"
+    nat_iface="$(printf '%s\n' "$route" | awk '{ for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
+    nat_source="$(printf '%s\n' "$route" | awk '{ for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+    if [ -z "$nat_iface" ] || [ -z "$nat_source" ]; then
+      echo "Could not determine VirtualBox NAT interface and source address" >&2
+      exit 1
+    fi
+    case "$nat_source" in
+      10.0.2.*) ;;
+      *)
+        echo "Route to VirtualBox NAT gateway uses unexpected source address $nat_source" >&2
+        exit 1
+        ;;
+    esac
+    if [ "$nat_iface" = "{{ private_network_interface.stdout | trim }}" ]; then
+      echo "NAT and private network resolved to the same interface ($nat_iface)" >&2
+      exit 1
+    fi
+    printf '%s\n' "$nat_iface"
+  register: nat_network_interface
+  changed_when: false
+  failed_when: >-
+    nat_network_interface.rc != 0 or
+    nat_network_interface.stdout | trim == ""
+
+- name: Allow trusted private subnet traffic on the private interface
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: "{{ private_network_interface.stdout | trim }}"
+    from_ip: 192.168.56.0/24
+
+- name: Allow Vagrant SSH forwarding from the VirtualBox NAT gateway
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: "{{ nat_network_interface.stdout | trim }}"
+    from_ip: 10.0.2.2
+    port: '22'
+    proto: tcp
+
+- name: Inspect current UFW rules before removing legacy port allowances
+  ansible.builtin.command: ufw status
+  register: current_ufw_rules
+  changed_when: false
+
+- name: Remove legacy private-subnet port rules from all interfaces
+  community.general.ufw:
+    rule: allow
+    delete: true
+    from_ip: 192.168.56.0/24
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - '22'
+    - '80'
+    - '6443'
+    - '5000'
+  when: (item ~ '/tcp ALLOW IN 192.168.56.0/24') in current_ufw_rules.stdout
+
+- name: Set default firewall policy to private-only ingress
+  community.general.ufw:
+    direction: incoming
+    default: deny
+
+- name: Enable UFW after installing allowed ingress rules
+  community.general.ufw:
+    state: enabled
+
+- name: Allow private network egress for cluster and package traffic
+  ansible.builtin.command: ufw allow out to any proto any
+  changed_when: false
+
+- name: Download Kubernetes repository signing key
+  ansible.builtin.shell:
+    cmd: >
+      curl -fsSL
+      https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/Release.key
+      | gpg --dearmor
+      > /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  args:
+    creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+- name: Add Kubernetes APT repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg]
+      https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/ /
+    state: present
+    filename: kubernetes
+
+- name: Install Kubernetes binaries
+  ansible.builtin.apt:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+    update_cache: true
+
+- name: Hold Kubernetes packages
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+
+- name: Enable kubelet
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true

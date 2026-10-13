@@ -1,0 +1,27 @@
+# 1. Prepare OS & Install Containerd + Kubelet/Kubeadm
+- name: Prepare Kubernetes Nodes
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - common
+
+# 2. Bootstrap Control Plane
+- name: Initialize Control Plane
+  hosts: control_plane
+  become: true
+  roles:
+    - control_plane
+
+# 3. Join Worker Nodes
+- name: Join Worker Nodes
+  hosts: workers
+  become: true
+  roles:
+    - worker
+
+# 4. Deploy Gateway API CRDs & Cilium CNI
+- name: Deploy Cilium & Gateway API
+  hosts: control_plane
+  become: false
+  roles:
+    - cilium

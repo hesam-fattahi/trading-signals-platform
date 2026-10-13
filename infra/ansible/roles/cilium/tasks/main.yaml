@@ -1,0 +1,106 @@
+- name: Install Helm prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - tar
+    state: present
+    update_cache: true
+  become: true
+
+- name: Check whether Helm is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/helm
+  register: helm_bin
+
+- name: Install Helm CLI
+  ansible.builtin.shell: |
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  when: not helm_bin.stat.exists
+  become: true
+
+- name: Add Cilium Helm repository
+  kubernetes.core.helm_repository:
+    name: cilium
+    repo_url: "{{ cilium_helm_repo }}"
+
+- name: Install Gateway API experimental CRDs required by Cilium
+  ansible.builtin.command: >
+    kubectl apply
+    --server-side
+    -f https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ gateway_api_version }}/experimental-install.yaml
+  register: gateway_api_crds
+  changed_when: >
+    'created' in gateway_api_crds.stdout or
+    'configured' in gateway_api_crds.stdout
+
+- name: Create Cilium temporary directory
+  ansible.builtin.file:
+    path: /tmp/cilium
+    state: directory
+    mode: "0755"
+
+- name: Render Cilium Helm values
+  ansible.builtin.template:
+    src: cilium-values.yaml.j2
+    dest: /tmp/cilium/values.yaml
+    mode: "0644"
+
+- name: Deploy Cilium
+  kubernetes.core.helm:
+    name: cilium
+    chart_ref: cilium/cilium
+    chart_version: "{{ cilium_version }}"
+    release_namespace: kube-system
+    create_namespace: true
+    values_files:
+      - /tmp/cilium/values.yaml
+    wait: true
+    wait_timeout: 10m
+
+- name: Render Cilium LoadBalancer IP pool
+  ansible.builtin.template:
+    src: lb-ip-pool.yaml.j2
+    dest: /tmp/cilium/lb-ip-pool.yaml
+    mode: "0644"
+
+- name: Apply Cilium LoadBalancer IP pool
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/cilium/lb-ip-pool.yaml
+  register: lb_pool_apply
+  changed_when: >
+    'created' in lb_pool_apply.stdout or
+    'configured' in lb_pool_apply.stdout
+
+- name: Render Cilium L2 announcement policy
+  ansible.builtin.template:
+    src: l2-announcement-policy.yaml.j2
+    dest: /tmp/cilium/l2-announcement-policy.yaml
+    mode: "0644"
+
+- name: Apply Cilium L2 announcement policy
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/cilium/l2-announcement-policy.yaml
+  register: l2_policy_apply
+  changed_when: >
+    'created' in l2_policy_apply.stdout or
+    'configured' in l2_policy_apply.stdout
+
+- name: Download Cilium CLI
+  ansible.builtin.get_url:
+    url: "https://github.com/cilium/cilium-cli/releases/download/{{ cilium_cli_version }}/cilium-linux-amd64.tar.gz"
+    dest: "/tmp/cilium-linux-amd64.tar.gz"
+    mode: "0644"
+
+- name: Extract Cilium CLI
+  ansible.builtin.unarchive:
+    src: "/tmp/cilium-linux-amd64.tar.gz"
+    dest: "/usr/local/bin"
+    remote_src: true
+    mode: "0755"
+  become: true
+
+- name: Validate Cilium
+  ansible.builtin.command:
+    cmd: cilium status --wait
+  register: cilium_status
+  changed_when: false

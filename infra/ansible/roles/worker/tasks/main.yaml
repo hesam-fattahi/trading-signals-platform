@@ -1,0 +1,15 @@
+- name: Check if worker node is already joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Render kubeadm join configuration
+  ansible.builtin.template:
+    src: kubeadm-join-config.yaml.j2
+    dest: /tmp/kubeadm-join-config.yaml
+    mode: '0644'
+  when: not kubelet_conf.stat.exists
+
+- name: Join worker node to cluster
+  ansible.builtin.command: kubeadm join --config=/tmp/kubeadm-join-config.yaml
+  when: not kubelet_conf.stat.exists
