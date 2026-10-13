@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package trading.v1;
+
+option go_package = "github.com/hesam-fattahi/trading-signals-platform/gen/go/trading/v1;tradingv1";
+
+message MarketBarEvent {
+  string event_id = 1;
+  string symbol = 2;
+  int64 event_time_unix_ms = 3;
+
+  double open = 4;
+  double high = 5;
+  double low = 6;
+  double close = 7;
+  double volume = 8;
+}

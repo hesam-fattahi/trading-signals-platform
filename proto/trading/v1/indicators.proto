@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package trading.v1;
+
+option go_package = "github.com/hesam-fattahi/trading-signals-platform/gen/go/trading/v1;tradingv1";
+
+message IndicatorEvent {
+  string event_id = 1;
+  string symbol = 2;
+  int64 event_time_unix_ms = 3;
+
+  double close = 4;
+
+  double bollinger_middle = 5;
+  double bollinger_upper = 6;
+  double bollinger_lower = 7;
+
+  double rsi = 8;
+  double adx = 9;
+}

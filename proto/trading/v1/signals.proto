@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package trading.v1;
+
+option go_package = "github.com/hesam-fattahi/trading-signals-platform/gen/go/trading/v1;tradingv1";
+
+enum SignalAction {
+  SIGNAL_ACTION_UNSPECIFIED = 0;
+  SIGNAL_ACTION_HOLD = 1;
+  SIGNAL_ACTION_LONG_ENTRY = 2;
+  SIGNAL_ACTION_LONG_EXIT = 3;
+  SIGNAL_ACTION_SHORT_ENTRY = 4;
+  SIGNAL_ACTION_SHORT_EXIT = 5;
+}
+
+message SignalEvent {
+  string event_id = 1;
+  string symbol = 2;
+  int64 event_time_unix_ms = 3;
+
+  SignalAction action = 4;
+
+  double price = 5;
+  string strategy = 6;
+}
