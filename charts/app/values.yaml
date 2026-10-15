@@ -1,0 +1,45 @@
+global:
+  imageRegistry: 192.168.56.241:5000
+  imageTag: dev
+  imagePullPolicy: IfNotPresent
+
+kafka:
+  # Namespace-qualified: Kafka lives in `platform`, the app runs in `default`.
+  bootstrap: trading-events-kafka-bootstrap.platform.svc.cluster.local:9092
+  topics:
+    rawTicks: raw-ticks
+
+generator:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: trading-generator
+    tag: ""
+  config:
+    ticker: BTC-USD
+    period: 5d
+    interval: 1m
+    streamSpeedSec: "0.2"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+ingestion:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: trading-ingestion
+    tag: ""
+  config:
+    logLevel: info
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi

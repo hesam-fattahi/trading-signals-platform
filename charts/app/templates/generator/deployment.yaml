@@ -1,0 +1,48 @@
+{{- if .Values.generator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: generator
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: generator
+spec:
+  replicas: {{ .Values.generator.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: generator
+  template:
+    metadata:
+      labels:
+        {{- include "app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: generator
+    spec:
+      containers:
+        - name: generator
+          image: {{ include "app.image" (dict "root" . "image" .Values.generator.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: ws
+              containerPort: 8080
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8080"
+            - name: TICKERS
+              value: {{ .Values.generator.config.ticker | quote }}
+            - name: PERIOD
+              value: {{ .Values.generator.config.period | quote }}
+            - name: INTERVAL
+              value: {{ .Values.generator.config.interval | quote }}
+            - name: STREAM_SPEED_SEC
+              value: {{ .Values.generator.config.streamSpeedSec | quote }}
+          resources:
+            {{- toYaml .Values.generator.resources | nindent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+{{- end }}

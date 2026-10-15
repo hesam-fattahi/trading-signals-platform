@@ -1,0 +1,19 @@
+{{- if .Values.generator.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: generator
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: generator
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "app.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: generator
+  ports:
+    - name: ws
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+{{- end }}
