@@ -1,0 +1,21 @@
+{{- if .Values.strimzi.enabled }}
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: kafka
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    strimzi.io/cluster: {{ .Values.kafka.clusterName }}
+spec:
+  replicas: {{ .Values.kafka.replicas }}
+  roles:
+    - controller
+    - broker
+  storage:
+    type: persistent-claim
+    size: {{ .Values.kafka.storage.size }}
+    deleteClaim: {{ .Values.kafka.storage.deleteClaim }}
+    class: {{ .Values.global.storageClass }}
+  resources:
+    {{- toYaml .Values.kafka.resources | nindent 4 }}
+{{- end }}

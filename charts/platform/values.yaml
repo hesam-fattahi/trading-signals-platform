@@ -1,0 +1,96 @@
+# =============================================================================
+# Global
+# =============================================================================
+global:
+  # StorageClass used by Kafka's PVCs. On this cluster it's the
+  # local-path-provisioner installed via Ansible.
+  storageClass: local-path
+
+# =============================================================================
+# Strimzi Kafka Operator (Helm dependency)
+# =============================================================================
+strimzi:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# =============================================================================
+# Kafka cluster
+# =============================================================================
+kafka:
+  clusterName: trading-events
+  version: 4.3.1
+  replicas: 1
+
+  storage:
+    size: 5Gi
+    deleteClaim: false
+
+  listeners:
+    plain:
+      port: 9092
+
+  config:
+    offsetsTopicReplicationFactor: 1
+    transactionStateLogReplicationFactor: 1
+    transactionStateLogMinIsr: 1
+    defaultReplicationFactor: 1
+    minInsyncReplicas: 1
+    logRetentionHours: 24
+    autoCreateTopics: false
+
+  # Strimzi's default is -Xms2g -Xmx2g, which OOM-kills my hardware with 2GB workers.
+  jvmOptions:
+    xms: 256m
+    xmx: 512m
+
+  # Probe timings. Relaxed significantly from Strimzi's defaults because
+  # Kafka takes 60-120 s to start on a 1-CPU node with local-path storage.
+  # Defaults (15 s delay, 3 failures, 10 s period = 45 s before kill)
+  # cause a crash loop: the liveness probe fires before the broker is up.
+  readinessProbe:
+    initialDelaySeconds: 60
+    timeoutSeconds: 15
+    periodSeconds: 20
+    failureThreshold: 15
+  livenessProbe:
+    initialDelaySeconds: 120
+    timeoutSeconds: 15
+    periodSeconds: 30
+    failureThreshold: 10
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 768Mi
+
+# =============================================================================
+# Topics
+# =============================================================================
+topics:
+  rawTicks:
+    name: raw-ticks
+    partitions: 1
+    replicas: 1
+    retentionMs: "86400000"
+
+  indicatorEvents:
+    name: indicator-events
+    partitions: 1
+    replicas: 1
+    retentionMs: "86400000"
+
+  signalEvents:
+    name: signal-events
+    partitions: 1
+    replicas: 1
+    retentionMs: "604800000"

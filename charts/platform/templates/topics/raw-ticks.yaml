@@ -1,0 +1,14 @@
+{{- if .Values.strimzi.enabled }}
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: {{ .Values.topics.rawTicks.name }}
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    strimzi.io/cluster: {{ .Values.kafka.clusterName }}
+spec:
+  partitions: {{ .Values.topics.rawTicks.partitions }}
+  replicas: {{ .Values.topics.rawTicks.replicas }}
+  config:
+    retention.ms: {{ .Values.topics.rawTicks.retentionMs | quote }}
+{{- end }}

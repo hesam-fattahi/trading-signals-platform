@@ -1,0 +1,44 @@
+{{- if .Values.strimzi.enabled }}
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: {{ .Values.kafka.clusterName }}
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+spec:
+  kafka:
+    version: {{ .Values.kafka.version }}
+    replicas: {{ .Values.kafka.replicas }}
+    listeners:
+      - name: plain
+        port: {{ .Values.kafka.listeners.plain.port }}
+        type: internal
+        tls: false
+    config:
+      offsets.topic.replication.factor: {{ .Values.kafka.config.offsetsTopicReplicationFactor }}
+      transaction.state.log.replication.factor: {{ .Values.kafka.config.transactionStateLogReplicationFactor }}
+      transaction.state.log.min.isr: {{ .Values.kafka.config.transactionStateLogMinIsr }}
+      default.replication.factor: {{ .Values.kafka.config.defaultReplicationFactor }}
+      min.insync.replicas: {{ .Values.kafka.config.minInsyncReplicas }}
+      log.retention.hours: {{ .Values.kafka.config.logRetentionHours }}
+      auto.create.topics.enable: {{ .Values.kafka.config.autoCreateTopics }}
+    jvmOptions:
+      -Xms: {{ .Values.kafka.jvmOptions.xms }}
+      -Xmx: {{ .Values.kafka.jvmOptions.xmx }}
+    readinessProbe:
+      initialDelaySeconds: {{ .Values.kafka.readinessProbe.initialDelaySeconds }}
+      timeoutSeconds: {{ .Values.kafka.readinessProbe.timeoutSeconds }}
+      periodSeconds: {{ .Values.kafka.readinessProbe.periodSeconds }}
+      failureThreshold: {{ .Values.kafka.readinessProbe.failureThreshold }}
+    livenessProbe:
+      initialDelaySeconds: {{ .Values.kafka.livenessProbe.initialDelaySeconds }}
+      timeoutSeconds: {{ .Values.kafka.livenessProbe.timeoutSeconds }}
+      periodSeconds: {{ .Values.kafka.livenessProbe.periodSeconds }}
+      failureThreshold: {{ .Values.kafka.livenessProbe.failureThreshold }}
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+{{- end }}

@@ -1,0 +1,14 @@
+{{- if .Values.strimzi.enabled }}
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: {{ .Values.topics.signalEvents.name }}
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    strimzi.io/cluster: {{ .Values.kafka.clusterName }}
+spec:
+  partitions: {{ .Values.topics.signalEvents.partitions }}
+  replicas: {{ .Values.topics.signalEvents.replicas }}
+  config:
+    retention.ms: {{ .Values.topics.signalEvents.retentionMs | quote }}
+{{- end }}
