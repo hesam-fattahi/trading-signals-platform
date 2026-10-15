@@ -12,15 +12,10 @@ A mock service that fetches historical market data using `yfinance` and replays 
 
 ## How to Run with Docker
 
-Build the container locally:
+From the project's root directory, build the container locally:
 
 ```bash
-# Build the image
-docker build -t trading-generator:latest .
-```
-or in the root project directory, run:
-```bash
-make build-generator
+docker build -f services/generator/Dockerfile -t trading-generator:latest .
 ```
 
 Then run the container with custom options:

@@ -7,7 +7,6 @@ logger = logging.getLogger(__name__)
 
 
 class MarketDataStreamer:
-
     def __init__(
         self,
         data_points: list[dict],

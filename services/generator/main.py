@@ -1,8 +1,15 @@
 import asyncio
 import logging
-import websockets
 
-from config import HOST, PORT, TICKER, PERIOD, INTERVAL, STREAM_SPEED_SEC
+import websockets
+from config import (
+    HOST,
+    INTERVAL,
+    PERIOD,
+    PORT,
+    STREAM_SPEED_SEC,
+    TICKER,
+)
 from fetch_market_data import fetch_market_data
 from replay import MarketDataStreamer
 from websocket_server import WebSocketServer
@@ -11,6 +18,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def main():
@@ -34,7 +43,9 @@ async def main():
         interval_seconds=STREAM_SPEED_SEC,
     )
 
-    logging.info("Generator listening on ws://%s:%s (Streaming ticker=%s)", HOST, PORT, TICKER)
+    logger.info(
+        "Generator listening on ws://%s:%s (Streaming ticker=%s)", HOST, PORT, TICKER
+    )
 
     await asyncio.gather(
         server.wait_closed(),
