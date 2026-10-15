@@ -9,10 +9,28 @@ Thumbs.db
 *.swo
 
 # ==============================================================================
+# ENV / SECRETS
+# ==============================================================================
+.env
+.env.*
+!.env.example
+
+# ==============================================================================
+# LOGS / COVERAGE / CACHES
+# ==============================================================================
+*.log
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ==============================================================================
 # PROTOC / GENERATED STUBS
 # ==============================================================================
-# Ignore generated proto outputs since they are built via Makefile/CI
-gen/
+# Only the repo-root gen/ is generated; keep this anchored so it doesn't
+# swallow unrelated directories named "gen" deeper in the tree.
+/gen/
 *.pb.go
 *_grpc.pb.go
 
@@ -27,6 +45,7 @@ vendor/
 *.so
 *.dylib
 go.work
+go.work.sum
 
 # ==============================================================================
 # PYTHON (Generator & Signal Engine)
@@ -34,7 +53,6 @@ go.work
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
 build/
 develop-eggs/
@@ -67,7 +85,6 @@ venv.bak/
 target/
 *.class
 .gradle/
-build/
 out/
 .mvn/
 hs_err_pid*
@@ -75,7 +92,7 @@ hs_err_pid*
 # ==============================================================================
 # INFRASTRUCTURE & VAGRANT
 # ==============================================================================
-infra/.vagrant/
+.vagrant/
 *.vdi
 *.vmdk
 *.ova

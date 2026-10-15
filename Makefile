@@ -1,115 +1,206 @@
-SHELL := /bin/bash
+# =============================================================================
+# Configuration
+# =============================================================================
+REGISTRY  := 192.168.56.241:5000
+TAG       := dev
 
-# ==============================================================================
-# CONFIGURATION & BINARIES
-# ==============================================================================
-GO ?= go
-GOFMT ?= gofmt
-BUF ?= buf
-PROTOC ?= protoc
-RUFF ?= ruff
-DOCKER ?= docker
-GOVULNCHECK ?= govulncheck
+GENERATOR_DIR := services/generator
+INGESTION_DIR := services/ingestion
 
-# Paths & Services
-PROTO_DIR := proto
-GO_OUT := gen/go
-PYTHON_OUT := gen/python
-PROTO_FILES := $(shell find $(PROTO_DIR) -name '*.proto')
-SERVICES := generator ingestion stream-processor signal-service
+GENERATOR_IMAGE := $(REGISTRY)/trading-generator:$(TAG)
+INGESTION_IMAGE := $(REGISTRY)/trading-ingestion:$(TAG)
 
-.PHONY: all
-all: check
+PLATFORM_NAMESPACE := platform
+PLATFORM_RELEASE   := platform
+PLATFORM_CHART     := charts/platform
 
+APP_NAMESPACE := default
+APP_RELEASE   := app
+APP_CHART     := charts/app
+
+# =============================================================================
+# Help
+# =============================================================================
 .PHONY: help
-help: ## Show available Make targets
-	@echo "Trading Signals Platform development commands:"
-	@echo
-	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make <target>\n\nTargets:\n"} \
-		/^[a-zA-Z0-9_-]+:.*##/ {printf "  %-28s %s\n", $$1, $$2}' \
-		$(MAKEFILE_LIST)
+help: ## Show this help
+	@echo "Trading signals platform — available targets:"
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	  awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo ""
 
-# --------------------------------------------------------------------
-# Protobuf & Contracts
-# --------------------------------------------------------------------
-.PHONY: proto-format proto-format-check proto-lint proto-build proto-generate proto-check
-proto-format: ## Format all Protobuf files using buf
-	$(BUF) format -w $(PROTO_DIR)
+# =============================================================================
+# Protobuf (buf)
+# =============================================================================
+.PHONY: proto-generate
+proto-generate: ## Generate protobuf stubs (go) from .proto files
+	buf generate
 
-proto-format-check: ## Check formatting of Protobuf files
-	@test -z "$$($(BUF) format --diff $(PROTO_DIR))" || \
-		(echo "Protobuf files are not formatted. Run 'make proto-format'." && exit 1)
+.PHONY: proto-lint
+proto-lint: ## Lint .proto files
+	buf lint
 
-proto-lint: ## Lint Protobuf definitions against standard rules
-	$(BUF) lint $(PROTO_DIR)
+.PHONY: proto-format
+proto-format: ## Format .proto files in place
+	buf format -w
 
-proto-build: ## Build Protobuf module schema
-	$(BUF) build $(PROTO_DIR)
+.PHONY: proto-format-check
+proto-format-check: ## Check .proto formatting (fails if not formatted)
+	@buf format -d --exit-code
 
-proto-generate: ## Generate Go and Python stubs from proto files
-	@mkdir -p $(GO_OUT) $(PYTHON_OUT)
-	$(PROTOC) \
-		-I $(PROTO_DIR) \
-		--go_out=$(GO_OUT) \
-		--go_opt=paths=source_relative \
-		--python_out=$(PYTHON_OUT) \
-		$(PROTO_FILES)
+.PHONY: proto-breaking
+proto-breaking: ## Check .proto files for breaking changes against main
+	buf breaking --against '.git#branch=main'
 
-proto-check: proto-format-check proto-lint proto-build proto-generate ## Run all proto validation and generation
+.PHONY: proto-check
+proto-check: proto-lint proto-format-check ## Run all proto checks
 
-# --------------------------------------------------------------------
-# Code Quality & Validation
-# --------------------------------------------------------------------
-.PHONY: go-fmt-check go-vet go-check python-fmt-check python-lint python-check
-go-fmt-check: ## Check Go source file formatting
-	@test -z "$$($(GOFMT) -l services/ingestion)" || (echo "Unformatted Go files:" && $(GOFMT) -l services/ingestion && exit 1)
+.PHONY: proto-clean
+proto-clean: ## Remove generated proto output
+	rm -rf gen/go/trading
 
-go-vet: ## Run go vet on ingestion service
-	cd services/ingestion && $(GO) vet ./...
+# =============================================================================
+# Go tooling (ingestion module)
+# =============================================================================
+GO_MODULES := services/ingestion gen/go
 
-python-fmt-check: ## Check Python formatting using ruff
-	$(RUFF) format --check services/generator services/signal-service
+.PHONY: fmt
+fmt: ## Format Go code
+	cd services/ingestion && gofmt -s -w .
 
-python-lint: ## Run ruff linter on Python services
-	$(RUFF) check services/generator services/signal-service
+.PHONY: fmt-check
+fmt-check: ## Check Go formatting (fails if not formatted)
+	@cd services/ingestion && \
+	  out=$$(gofmt -s -l .) && \
+	  if [ -n "$$out" ]; then \
+	    echo "Files not formatted:"; \
+	    echo "$$out"; \
+	    exit 1; \
+	  fi
 
-go-check: proto-check go-fmt-check go-vet ## Run Go & Proto quality checks
-python-check: python-fmt-check python-lint ## Run Python quality checks
+.PHONY: vet
+vet: ## Run go vet on Go code
+	cd services/ingestion && go vet ./...
 
-# --------------------------------------------------------------------
-# Unit Tests
-# --------------------------------------------------------------------
-.PHONY: unit-test go-unit-test python-unit-test
-go-unit-test: ## Run Go unit tests with race detector
-	cd services/ingestion && $(GO) test -race -count=1 -coverprofile=coverage.out ./...
-
-python-unit-test: ## Run Python unit tests with pytest
-	@for d in services/generator services/signal-service; do \
-		if [ -d "$$d" ]; then (cd $$d && pytest); fi; \
+.PHONY: tidy
+tidy: ## Run go mod tidy on all Go modules
+	@for m in $(GO_MODULES); do \
+	  echo "==> tidy $$m"; \
+	  (cd $$m && go mod tidy); \
 	done
 
-unit-test: proto-generate go-unit-test python-unit-test ## Run all service unit tests
+.PHONY: download
+download: ## Download Go module dependencies
+	cd services/ingestion && go mod download
 
-# --------------------------------------------------------------------
-# Security & Vulnerability Scans
-# --------------------------------------------------------------------
-.PHONY: vuln-check
-vuln-check: ## Scan Go dependencies for known vulnerabilities
-	cd services/ingestion && $(GOVULNCHECK) ./...
+.PHONY: test
+test: ## Run Go tests
+	cd services/ingestion && go test ./...
 
-# --------------------------------------------------------------------
-# Universal Container Builds (Docker Buildx)
-# --------------------------------------------------------------------
-.PHONY: build-%
-build-%: proto-generate ## Universally build any service container image using buildx
-	$(DOCKER) buildx build --load -t trading-$*:latest -f services/$*/Dockerfile services/$*
+.PHONY: build
+build: ## Build the ingestion Go binary locally (no Docker)
+	cd services/ingestion && go build -o ../../bin/ingestion ./cmd
+
+.PHONY: lint
+lint: fmt-check vet ## Run Go linters
+
+.PHONY: check
+check: fmt-check vet test ## Run all Go checks
+
+# =============================================================================
+# Python (generator)
+# =============================================================================
+GENERATOR_VENV    := services/generator/venv
+GENERATOR_PYTHON  := $(GENERATOR_VENV)/bin/python
+GENERATOR_PIP     := $(GENERATOR_VENV)/bin/pip
+GENERATOR_PYFILES := $(shell find services/generator -name '*.py' -not -path '*/venv/*')
+
+.PHONY: python-venv
+python-venv: ## Create the generator virtualenv if it doesn't exist
+	@test -d $(GENERATOR_VENV) || python3 -m venv $(GENERATOR_VENV)
+	@$(GENERATOR_PIP) install --quiet --upgrade pip
+
+.PHONY: python-install
+python-install: python-venv ## Install generator dependencies into the venv
+	$(GENERATOR_PIP) install -r services/generator/requirements.txt
+
+.PHONY: python-lint
+python-lint: python-install ## Run ruff on the generator source
+	$(GENERATOR_VENV)/bin/ruff check services/generator
+
+.PHONY: python-format
+python-format: python-install ## Format generator source with ruff
+	$(GENERATOR_VENV)/bin/ruff format services/generator
+
+.PHONY: python-format-check
+python-format-check: python-install ## Check generator formatting (fails if not formatted)
+	$(GENERATOR_VENV)/bin/ruff format --check services/generator
+
+.PHONY: python-check
+python-check: python-lint python-format-check ## Run all Python checks
+
+# =============================================================================
+# Aggregating all the checks
+# =============================================================================
+.PHONY: check-all
+check-all: proto-check python-check check ## Run all proto, Python, and Go checks
+
+# =============================================================================
+# Build images (buildx → local Docker daemon)
+# =============================================================================
+.PHONY: build-generator
+build-generator: ## Build the generator image locally
+	docker buildx build \
+		--file $(GENERATOR_DIR)/Dockerfile \
+		--tag $(GENERATOR_IMAGE) \
+		--load \
+		$(GENERATOR_DIR)
+
+.PHONY: build-ingestion
+build-ingestion: ## Build the ingestion image locally
+	docker buildx build \
+		--file $(INGESTION_DIR)/Dockerfile \
+		--tag $(INGESTION_IMAGE) \
+		--load \
+		.
 
 .PHONY: build-all
-build-all: $(addprefix build-,$(SERVICES)) ## Build all service container images universally
+build-all: build-generator build-ingestion ## Build all images locally
 
-# --------------------------------------------------------------------
-# Pipeline Aliases
-# --------------------------------------------------------------------
-.PHONY: check ci
-check: proto-check go-check python-check ## Run static checks
-ci: check unit-test vuln-check build-all ## Run complete verification pipeline
+# =============================================================================
+# Load images (push to the local registry)
+# =============================================================================
+.PHONY: load-generator
+load-generator: build-generator ## Build and push the generator image
+	docker push $(GENERATOR_IMAGE)
+
+.PHONY: load-ingestion
+load-ingestion: build-ingestion ## Build and push the ingestion image
+	docker push $(INGESTION_IMAGE)
+
+.PHONY: load-all
+load-all: load-generator load-ingestion ## Build and push all images
+
+# =============================================================================
+# Platform chart (Kafka + Strimzi + topics)
+# =============================================================================
+.PHONY: platform-install
+platform-install: ## Install or upgrade the platform chart
+	helm upgrade --install $(PLATFORM_RELEASE) $(PLATFORM_CHART) \
+		-n $(PLATFORM_NAMESPACE) --create-namespace
+
+.PHONY: platform-uninstall
+platform-uninstall: ## Uninstall the platform chart
+	helm uninstall $(PLATFORM_RELEASE) -n $(PLATFORM_NAMESPACE)
+
+# =============================================================================
+# App chart (generator, ingestion, stream-processor, signal-service)
+# =============================================================================
+.PHONY: app-install
+app-install: ## Install or upgrade the app chart
+	helm upgrade --install $(APP_RELEASE) $(APP_CHART) \
+		-n $(APP_NAMESPACE) --create-namespace
+
+.PHONY: app-uninstall
+app-uninstall: ## Uninstall the app chart
+	helm uninstall $(APP_RELEASE) -n $(APP_NAMESPACE)
