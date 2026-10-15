@@ -25,3 +25,10 @@
   become: false
   roles:
     - cilium
+
+# 5. Install local persistent storage
+- name: Install local-path provisioner
+  hosts: control_plane
+  become: false
+  roles:
+    - local_path

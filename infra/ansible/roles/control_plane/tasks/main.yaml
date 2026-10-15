@@ -1,3 +1,90 @@
+- name: Persist the registry secondary IP via netplan
+  ansible.builtin.copy:
+    dest: /etc/netplan/60-registry.yaml
+    mode: "0600"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp0s8:
+            addresses:
+              - {{ ansible_host }}/24
+              - {{ registry_ip }}/24
+  when: inventory_hostname == "control-plane"
+  notify: Apply netplan
+
+- name: Apply netplan
+  ansible.builtin.meta: flush_handlers
+
+- name: Install Docker for the host-level registry
+  ansible.builtin.apt:
+    name:
+      - docker.io
+    state: present
+    update_cache: true
+  when: inventory_hostname == "control-plane"
+  tags: [registry]
+
+- name: Start Docker service
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+  when: inventory_hostname == "control-plane"
+  tags: [registry]
+
+- name: Ensure registry data directory exists
+  ansible.builtin.file:
+    path: /var/lib/trading-registry
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: inventory_hostname == "control-plane"
+  tags: [registry]
+
+- name: Install systemd unit for the host registry
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/trading-registry.service
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Trading signals platform host registry
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      ExecStartPre=-/usr/bin/docker rm -f trading-registry
+      ExecStart=/usr/bin/docker run --name trading-registry --publish 192.168.56.241:5000:5000 --volume /var/lib/trading-registry:/var/lib/registry --cpus=0.2 --cpu-shares=51 --memory=256m --memory-reservation=128m --restart=unless-stopped registry:2
+      ExecStop=/usr/bin/docker stop trading-registry
+      ExecStopPost=/usr/bin/docker rm -f trading-registry
+      Restart=on-failure
+      RestartSec=5s
+
+      [Install]
+      WantedBy=multi-user.target
+  when: inventory_hostname == "control-plane"
+  tags: [registry]
+
+- name: Enable and start the host registry service
+  ansible.builtin.systemd:
+    name: trading-registry
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: inventory_hostname == "control-plane"
+  tags: [registry]
+
+- name: Wait for the registry to respond on the host address
+  ansible.builtin.wait_for:
+    host: 192.168.56.241
+    port: 5000
+    timeout: 60
+  when: inventory_hostname == "control-plane"
+  tags: [registry]
+
 - name: Check if control plane is already initialized
   ansible.builtin.stat:
     path: /etc/kubernetes/admin.conf

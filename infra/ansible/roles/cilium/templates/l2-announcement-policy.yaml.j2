@@ -1,11 +1,11 @@
 apiVersion: cilium.io/v2alpha1
 kind: CiliumL2AnnouncementPolicy
 metadata:
-  name: piksel
+  name: trading
 spec:
   serviceSelector:
     matchLabels:
-      app.kubernetes.io/part-of: piksel
+      app.kubernetes.io/part-of: trading
 
   nodeSelector:
     matchExpressions:
@@ -21,11 +21,11 @@ spec:
 apiVersion: cilium.io/v2alpha1
 kind: CiliumL2AnnouncementPolicy
 metadata:
-  name: piksel-gateway
+  name: trading-gateway
 spec:
   serviceSelector:
     matchLabels:
-      io.cilium.gateway/owning-gateway: piksel-gateway
+      io.cilium.gateway/owning-gateway: trading-gateway
 
   nodeSelector:
     matchExpressions:

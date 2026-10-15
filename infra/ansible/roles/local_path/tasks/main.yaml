@@ -1,0 +1,24 @@
+- name: Install local-path provisioner
+  ansible.builtin.command:
+    cmd: kubectl apply -f {{ local_path_manifest_url }}
+  register: local_path_apply
+  changed_when: >
+    'created' in local_path_apply.stdout or
+    'configured' in local_path_apply.stdout
+
+- name: Wait for local-path provisioner deployment
+  ansible.builtin.command:
+    cmd: >
+      kubectl -n local-path-storage
+      rollout status deployment/local-path-provisioner
+      --timeout=180s
+  changed_when: false
+
+- name: Make local-path the default StorageClass
+  ansible.builtin.command:
+    cmd: >
+      kubectl patch storageclass local-path
+      -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+  register: storage_class_patch
+  changed_when: >
+    storage_class_patch.rc == 0
