@@ -1,21 +1,3 @@
-- name: Persist the registry secondary IP via netplan
-  ansible.builtin.copy:
-    dest: /etc/netplan/60-registry.yaml
-    mode: "0600"
-    content: |
-      network:
-        version: 2
-        ethernets:
-          enp0s8:
-            addresses:
-              - {{ ansible_host }}/24
-              - {{ registry_ip }}/24
-  when: inventory_hostname == "control-plane"
-  notify: Apply netplan
-
-- name: Apply netplan
-  ansible.builtin.meta: flush_handlers
-
 - name: Install Docker for the host-level registry
   ansible.builtin.apt:
     name:
@@ -57,7 +39,7 @@
 
       [Service]
       ExecStartPre=-/usr/bin/docker rm -f trading-registry
-      ExecStart=/usr/bin/docker run --name trading-registry --publish 192.168.56.241:5000:5000 --volume /var/lib/trading-registry:/var/lib/registry --cpus=0.2 --cpu-shares=51 --memory=256m --memory-reservation=128m --restart=unless-stopped registry:2
+      ExecStart=/usr/bin/docker run --name trading-registry --publish 192.168.56.10:5000:5000 --volume /var/lib/trading-registry:/var/lib/registry --cpus=0.2 --cpu-shares=51 --memory=256m --memory-reservation=128m --restart=unless-stopped registry:2
       ExecStop=/usr/bin/docker stop trading-registry
       ExecStopPost=/usr/bin/docker rm -f trading-registry
       Restart=on-failure
@@ -79,7 +61,7 @@
 
 - name: Wait for the registry to respond on the host address
   ansible.builtin.wait_for:
-    host: 192.168.56.241
+    host: 192.168.56.10
     port: 5000
     timeout: 60
   when: inventory_hostname == "control-plane"

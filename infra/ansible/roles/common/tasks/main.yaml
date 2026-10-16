@@ -82,7 +82,7 @@
 
 - name: Create containerd registry configuration directory
   ansible.builtin.file:
-    path: /etc/containerd/certs.d/192.168.56.241:5000
+    path: /etc/containerd/certs.d/192.168.56.10:5000
     state: directory
     owner: root
     group: root
@@ -91,14 +91,14 @@
 
 - name: Configure containerd for local registry
   ansible.builtin.copy:
-    dest: /etc/containerd/certs.d/192.168.56.241:5000/hosts.toml
+    dest: /etc/containerd/certs.d/192.168.56.10:5000/hosts.toml
     owner: root
     group: root
     mode: "0644"
     content: |
-      server = "http://192.168.56.241:5000"
+      server = "http://192.168.56.10:5000"
 
-      [host."http://192.168.56.241:5000"]
+      [host."http://192.168.56.10:5000"]
         capabilities = ["pull", "resolve", "push"]
         skip_verify = true
   notify: Restart containerd
