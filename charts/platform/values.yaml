@@ -50,10 +50,8 @@ kafka:
     xms: 256m
     xmx: 512m
 
-  # Probe timings. Relaxed significantly from Strimzi's defaults because
-  # Kafka takes 60-120 s to start on a 1-CPU node with local-path storage.
-  # Defaults (15 s delay, 3 failures, 10 s period = 45 s before kill)
-  # cause a crash loop: the liveness probe fires before the broker is up.
+  # Relaxed probe timings significantly from Strimzi's defaults because
+  # Kafka took more than a minute to start on a 1-CPU node with local-path storage.
   readinessProbe:
     initialDelaySeconds: 60
     timeoutSeconds: 15
@@ -94,3 +92,10 @@ topics:
     partitions: 1
     replicas: 1
     retentionMs: "604800000"
+
+  indicatorStateChangelog:
+    name: indicator-state-changelog
+    partitions: 1
+    replicas: 1
+    cleanupPolicy: compact
+    retentionMs: "-1"
