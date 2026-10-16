@@ -14,6 +14,7 @@ import (
 
 type Producer struct {
 	writer *kafka.Writer
+	topic  string
 	logger *slog.Logger
 }
 
@@ -21,7 +22,7 @@ func NewProducer(broker string, topic string, logger *slog.Logger) *Producer {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(broker),
 		Topic:        topic,
-		Balancer:     &kafka.Hash{}, // To make sure messages with the same key go to the same partition
+		Balancer:     &kafka.Hash{},
 		BatchTimeout: 10 * time.Millisecond,
 		RequiredAcks: kafka.RequireAll,
 	}
@@ -48,7 +49,13 @@ func (p *Producer) Produce(ctx context.Context, event *tradingv1.MarketBarEvent,
 		return fmt.Errorf("failed to write kafka message: %w", err)
 	}
 
-	p.logger.Debug("produced market bar event to kafka", "symbol", event.Symbol, "key", idempotentKey)
+	// p.logger.Debug("produced market bar event to kafka", "symbol", event.Symbol, "key", idempotentKey)
+	p.logger.Info("produced market bar event",
+		"topic", p.topic,
+		"key", idempotentKey,
+		"symbol", event.Symbol,
+		"close", event.Close,
+	)
 	return nil
 }
 

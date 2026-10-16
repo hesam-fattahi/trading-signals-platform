@@ -10,8 +10,8 @@ require (
 )
 
 require (
-	github.com/klauspost/compress v1.15.9 // indirect
-	github.com/pierrec/lz4/v4 v4.1.15 // indirect
+	github.com/klauspost/compress v1.20.1 // indirect
+	github.com/pierrec/lz4/v4 v4.1.31 // indirect
 )
 
 replace github.com/hesam-fattahi/trading-signals-platform/gen/go => ../../gen/go
