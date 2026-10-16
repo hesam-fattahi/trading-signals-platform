@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package trading.v1;
+
+option go_package = "github.com/hesam-fattahi/trading-signals-platform/gen/go/trading/v1;tradingv1";
+
+message SymbolState {
+  string symbol = 1;
+  repeated double recent_closes = 2;
+  repeated double recent_highs = 3;
+  repeated double recent_lows = 4;
+  int64 last_event_time_unix_ms = 5;
+}
