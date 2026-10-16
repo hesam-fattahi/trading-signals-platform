@@ -1,5 +1,5 @@
 global:
-  imageRegistry: 192.168.56.241:5000
+  imageRegistry: 192.168.56.10:5000
   imageTag: dev
   imagePullPolicy: IfNotPresent
 
@@ -8,7 +8,10 @@ kafka:
   bootstrap: trading-events-kafka-bootstrap.platform.svc.cluster.local:9092
   topics:
     rawTicks: raw-ticks
-
+    indicatorEvents: indicator-events
+    indicatorStateChangelog: indicator-state-changelog
+    signalEvents: signal-events
+    
 generator:
   enabled: true
   replicaCount: 1
@@ -42,4 +45,25 @@ ingestion:
       memory: 64Mi
     limits:
       cpu: 200m
+      memory: 256Mi
+
+indicator:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: trading-indicator-calculator
+    tag: ""
+  config:
+    logLevel: info
+    maxBars: "100"
+    bollingerWindow: "20"
+    bollingerK: "2.0"
+    rsiWindow: "14"
+    adxWindow: "14"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
       memory: 256Mi

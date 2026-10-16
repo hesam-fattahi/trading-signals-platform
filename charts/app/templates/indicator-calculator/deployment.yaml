@@ -1,0 +1,48 @@
+{{- if .Values.indicator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: indicator-calculator
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: indicator-calculator
+spec:
+  replicas: {{ .Values.indicator.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: indicator-calculator
+  template:
+    metadata:
+      labels:
+        {{- include "app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: indicator-calculator
+    spec:
+      containers:
+        - name: indicator-calculator
+          image: {{ include "app.image" (dict "root" . "image" .Values.indicator.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          env:
+            - name: KAFKA_BROKERS
+              value: {{ .Values.kafka.bootstrap | quote }}
+            - name: RAW_TICKS_TOPIC
+              value: {{ .Values.kafka.topics.rawTicks | quote }}
+            - name: INDICATOR_TOPIC
+              value: {{ .Values.kafka.topics.indicatorEvents | quote }}
+            - name: KAFKA_GROUP_ID
+              value: "indicator-calculator"
+            - name: LOG_LEVEL
+              value: {{ .Values.indicator.config.logLevel | quote }}
+            - name: MAX_BARS
+              value: {{ .Values.indicator.config.maxBars | quote }}
+            - name: BOLLINGER_WINDOW
+              value: {{ .Values.indicator.config.bollingerWindow | quote }}
+            - name: BOLLINGER_K
+              value: {{ .Values.indicator.config.bollingerK | quote }}
+            - name: RSI_WINDOW
+              value: {{ .Values.indicator.config.rsiWindow | quote }}
+            - name: ADX_WINDOW
+              value: {{ .Values.indicator.config.adxWindow | quote }}
+          resources:
+            {{- toYaml .Values.indicator.resources | nindent 12 }}
+{{- end }}
