@@ -1,14 +1,17 @@
 # =============================================================================
 # Configuration
 # =============================================================================
-REGISTRY  := 192.168.56.241:5000
+REGISTRY  := 192.168.56.10:5000
 TAG       := dev
 
 GENERATOR_DIR := services/generator
 INGESTION_DIR := services/ingestion
+INDICATOR_DIR := services/indicator-calculator
+
 
 GENERATOR_IMAGE := $(REGISTRY)/trading-generator:$(TAG)
 INGESTION_IMAGE := $(REGISTRY)/trading-ingestion:$(TAG)
+INDICATOR_IMAGE := $(REGISTRY)/trading-indicator-calculator:$(TAG)
 
 PLATFORM_NAMESPACE := platform
 PLATFORM_RELEASE   := platform
@@ -60,27 +63,36 @@ proto-clean: ## Remove generated proto output
 	rm -rf gen/go/trading
 
 # =============================================================================
-# Go tooling (ingestion module)
+# Go toolin(Everything except generator and Kafka)
 # =============================================================================
-GO_MODULES := services/ingestion gen/go
+GO_MODULES := services/ingestion services/indicator-calculator gen/go
 
 .PHONY: fmt
-fmt: ## Format Go code
-	cd services/ingestion && gofmt -s -w .
+fmt: ## Format Go code in all modules
+	@for m in $(GO_MODULES); do \
+	  echo "==> fmt $$m"; \
+	  (cd $$m && gofmt -s -w .); \
+	done
 
 .PHONY: fmt-check
-fmt-check: ## Check Go formatting (fails if not formatted)
-	@cd services/ingestion && \
-	  out=$$(gofmt -s -l .) && \
+fmt-check: ## Check Go formatting across all modules (fails if not formatted)
+	@failed=0; \
+	for m in $(GO_MODULES); do \
+	  out=$$(cd $$m && gofmt -s -l .); \
 	  if [ -n "$$out" ]; then \
-	    echo "Files not formatted:"; \
+	    echo "Files not formatted in $$m:"; \
 	    echo "$$out"; \
-	    exit 1; \
-	  fi
+	    failed=1; \
+	  fi; \
+	done; \
+	if [ $$failed -eq 1 ]; then exit 1; fi
 
 .PHONY: vet
-vet: ## Run go vet on Go code
-	cd services/ingestion && go vet ./...
+vet: ## Run go vet on all Go modules
+	@for m in $(GO_MODULES); do \
+	  echo "==> vet $$m"; \
+	  (cd $$m && go vet ./...); \
+	done
 
 .PHONY: tidy
 tidy: ## Run go mod tidy on all Go modules
@@ -90,16 +102,18 @@ tidy: ## Run go mod tidy on all Go modules
 	done
 
 .PHONY: download
-download: ## Download Go module dependencies
-	cd services/ingestion && go mod download
+download: ## Download Go module dependencies for all modules
+	@for m in $(GO_MODULES); do \
+	  echo "==> download $$m"; \
+	  (cd $$m && go mod download); \
+	done
 
 .PHONY: test
-test: ## Run Go tests
-	cd services/ingestion && go test ./...
-
-.PHONY: build
-build: ## Build the ingestion Go binary locally (no Docker)
-	cd services/ingestion && go build -o ../../bin/ingestion ./cmd
+test: ## Run Go tests in all modules
+	@for m in $(GO_MODULES); do \
+	  echo "==> test $$m"; \
+	  (cd $$m && CGO_LDFLAGS="-lm" go test ./...); \
+	done
 
 .PHONY: lint
 lint: fmt-check vet ## Run Go linters
@@ -164,8 +178,16 @@ build-ingestion: ## Build the ingestion image locally
 		--load \
 		.
 
+.PHONY: build-indicator
+build-indicator: ## Build the indicator calculator image locally
+	docker buildx build \
+		--file $(INDICATOR_DIR)/Dockerfile \
+		--tag $(INDICATOR_IMAGE) \
+		--load \
+		.
+
 .PHONY: build-all
-build-all: build-generator build-ingestion ## Build all images locally
+build-all: build-generator build-ingestion build-indicator ## Build all images locally
 
 # =============================================================================
 # Load images (push to the local registry)
@@ -178,8 +200,12 @@ load-generator: build-generator ## Build and push the generator image
 load-ingestion: build-ingestion ## Build and push the ingestion image
 	docker push $(INGESTION_IMAGE)
 
+.PHONY: load-indicator
+load-indicator: build-indicator ## Build and push the indicator calculator image
+	docker push $(INDICATOR_IMAGE)
+
 .PHONY: load-all
-load-all: load-generator load-ingestion ## Build and push all images
+load-all: load-generator load-ingestion load-indicator ## Build and push all images
 
 # =============================================================================
 # Platform chart (Kafka + Strimzi + topics)
@@ -194,7 +220,7 @@ platform-uninstall: ## Uninstall the platform chart
 	helm uninstall $(PLATFORM_RELEASE) -n $(PLATFORM_NAMESPACE)
 
 # =============================================================================
-# App chart (generator, ingestion, stream-processor, signal-service)
+# App chart (Everything except generator and Kafka)
 # =============================================================================
 .PHONY: app-install
 app-install: ## Install or upgrade the app chart
