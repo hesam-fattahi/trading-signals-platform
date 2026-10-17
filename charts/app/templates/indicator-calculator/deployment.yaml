@@ -18,6 +18,7 @@ spec:
         {{- include "app.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: indicator-calculator
     spec:
+      terminationGracePeriodSeconds: {{ .Values.indicator.terminationGracePeriodSeconds }}
       containers:
         - name: indicator-calculator
           image: {{ include "app.image" (dict "root" . "image" .Values.indicator.image) }}

@@ -1,25 +1,39 @@
+# syntax=docker/dockerfile:1
+
 # ==============================================================================
-# 1 - Build the Go binary
+# 1 - Build the JAR
 # ==============================================================================
-FROM golang:1.27.1-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21 AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache gcc musl-dev
+COPY proto/ /proto/
 
-COPY . .
+COPY services/indicator-calculator-java/pom.xml /app/pom.xml
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -B -q dependency:go-offline
 
-WORKDIR /app/services/indicator-calculator
-RUN CGO_ENABLED=1 CGO_LDFLAGS="-lm" go build -ldflags="-s -w" -o /app/bin/indicator-calculator ./cmd
+COPY services/indicator-calculator-java/src/ /app/src/
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -B -q package -DskipTests
 
 # ==============================================================================
 # 2 - Runtime image
 # ==============================================================================
-FROM alpine:3.20
+FROM eclipse-temurin:21-jre-alpine
 
-RUN apk --no-cache add ca-certificates libc6-compat
+RUN apk add --no-cache --virtual .build-deps \
+        gcc make musl-dev curl tar && \
+    curl -fsSL https://downloads.sourceforge.net/project/ta-lib/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz \
+        -o /tmp/ta-lib.tar.gz && \
+    tar -xzf /tmp/ta-lib.tar.gz -C /tmp && \
+    cd /tmp/ta-lib && \
+    ./configure --prefix=/usr && \
+    make && make install && \
+    apk del .build-deps && \
+    rm -rf /tmp/ta-lib*
 
 WORKDIR /app
-COPY --from=builder /app/bin/indicator-calculator /app/indicator-calculator
+COPY --from=builder /app/target/indicator-calculator-0.1.0.jar /app/app.jar
 
-ENTRYPOINT ["/app/indicator-calculator"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
