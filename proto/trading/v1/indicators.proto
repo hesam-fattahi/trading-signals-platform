@@ -17,4 +17,7 @@ message IndicatorEvent {
 
   double rsi = 8;
   double adx = 9;
+
+  double di_minus = 10;
+  double di_plus = 11;
 }
