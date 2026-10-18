@@ -4,6 +4,9 @@ package trading.v1;
 
 option go_package = "github.com/hesam-fattahi/trading-signals-platform/gen/go/trading/v1;tradingv1";
 
+option java_package = "trading.v1";
+option java_outer_classname = "SymbolStateOuterClass";
+
 message SymbolState {
   string symbol = 1;
   repeated double recent_closes = 2;
