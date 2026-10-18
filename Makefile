@@ -7,11 +7,12 @@ TAG       := dev
 GENERATOR_DIR := services/generator
 INGESTION_DIR := services/ingestion
 INDICATOR_DIR := services/indicator-calculator
-
+SIGNAL_DIR := services/signal-decision
 
 GENERATOR_IMAGE := $(REGISTRY)/trading-generator:$(TAG)
 INGESTION_IMAGE := $(REGISTRY)/trading-ingestion:$(TAG)
 INDICATOR_IMAGE := $(REGISTRY)/trading-indicator-calculator:$(TAG)
+SIGNAL_IMAGE := $(REGISTRY)/trading-signal-decision:$(TAG)
 
 PLATFORM_NAMESPACE := platform
 PLATFORM_RELEASE   := platform
@@ -63,9 +64,9 @@ proto-clean: ## Remove generated proto output
 	rm -rf gen/go/trading
 
 # =============================================================================
-# Go toolin(Everything except generator and Kafka)
+# Go tooling (ingestion and signal-decision)
 # =============================================================================
-GO_MODULES := services/ingestion services/indicator-calculator gen/go
+GO_MODULES := services/ingestion services/signal-decision gen/go
 
 .PHONY: fmt
 fmt: ## Format Go code in all modules
@@ -154,10 +155,40 @@ python-format-check: python-install ## Check generator formatting (fails if not 
 python-check: python-lint python-format-check ## Run all Python checks
 
 # =============================================================================
+# Java tooling (indicator-calculator)
+# =============================================================================
+JAVA_MODULE := services/indicator-calculator
+
+.PHONY: fmt-java
+fmt-java: ## Format Java code with Spotless
+	cd $(JAVA_MODULE) && mvn -q spotless:apply
+
+.PHONY: fmt-check-java
+fmt-check-java: ## Check Java formatting
+	cd $(JAVA_MODULE) && mvn -q spotless:check
+
+.PHONY: spotbugs-java
+spotbugs-java: ## Run SpotBugs on Java code
+	cd $(JAVA_MODULE) && mvn -q compile spotbugs:check
+
+.PHONY: sec-java
+sec-java: ## Scan Java dependencies for CVEs
+	cd $(JAVA_MODULE) && mvn -q org.owasp:dependency-check-maven:check \
+		-DfailBuildOnCVSS=7
+
+.PHONY: test-java
+test-java: ## Run Java tests
+	cd $(JAVA_MODULE) && mvn -q test
+
+.PHONY: check-java
+check-java: fmt-check-java spotbugs-java test-java ## Run all Java checks
+
+
+# =============================================================================
 # Aggregating all the checks
 # =============================================================================
 .PHONY: check-all
-check-all: proto-check python-check check ## Run all proto, Python, and Go checks
+check-all: proto-check python-check check-java check ## Run all proto, Python, Java and Go checks
 
 # =============================================================================
 # Build images (buildx → local Docker daemon)
@@ -186,8 +217,16 @@ build-indicator: ## Build the indicator calculator image locally
 		--load \
 		.
 
+.PHONY: build-signal
+build-signal: ## Build the signal-decision image locally
+	docker buildx build \
+		--file $(SIGNAL_DIR)/Dockerfile \
+		--tag $(SIGNAL_IMAGE) \
+		--load \
+		.
+
 .PHONY: build-all
-build-all: build-generator build-ingestion build-indicator ## Build all images locally
+build-all: build-generator build-ingestion build-indicator build-signal ## Build all images locally
 
 # =============================================================================
 # Load images (push to the local registry)
@@ -204,8 +243,12 @@ load-ingestion: build-ingestion ## Build and push the ingestion image
 load-indicator: build-indicator ## Build and push the indicator calculator image
 	docker push $(INDICATOR_IMAGE)
 
+.PHONY: load-signal
+load-signal: build-signal ## Build and push the signal-decision image
+	docker push $(SIGNAL_IMAGE)
+
 .PHONY: load-all
-load-all: load-generator load-ingestion load-indicator ## Build and push all images
+load-all: load-generator load-ingestion load-indicator load-signal ## Build and push all images
 
 # =============================================================================
 # Platform chart (Kafka + Strimzi + topics)
