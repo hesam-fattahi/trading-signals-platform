@@ -92,10 +92,3 @@ topics:
     partitions: 1
     replicas: 1
     retentionMs: "604800000"
-
-  indicatorStateChangelog:
-    name: indicator-state-changelog
-    partitions: 1
-    replicas: 1
-    cleanupPolicy: compact
-    retentionMs: "-1"
