@@ -1,15 +1,13 @@
 global:
   imageRegistry: 192.168.56.10:5000
   imageTag: dev
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
 
 kafka:
-  # Namespace-qualified: Kafka lives in `platform`, the app runs in `default`.
   bootstrap: trading-events-kafka-bootstrap.platform.svc.cluster.local:9092
   topics:
     rawTicks: raw-ticks
     indicatorEvents: indicator-events
-    indicatorStateChangelog: indicator-state-changelog
     signalEvents: signal-events
     
 generator:
@@ -50,6 +48,7 @@ ingestion:
 indicator:
   enabled: true
   replicaCount: 1
+  terminationGracePeriodSeconds: 60 
   image:
     repository: trading-indicator-calculator
     tag: ""
@@ -66,4 +65,20 @@ indicator:
       memory: 128Mi
     limits:
       cpu: 500m
+      memory: 256Mi
+
+signal:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: trading-signal-decision
+    tag: ""
+  config:
+    logLevel: info
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
       memory: 256Mi
