@@ -31,13 +31,13 @@ spec:
             - name: PORT
               value: "8080"
             - name: TICKERS
-              value: {{ .Values.generator.config.ticker | quote }}
+              value: {{ .Values.marketData.ticker | quote }}
             - name: PERIOD
-              value: {{ .Values.generator.config.period | quote }}
+              value: {{ .Values.marketData.period | quote }}
             - name: INTERVAL
-              value: {{ .Values.generator.config.interval | quote }}
+              value: {{ .Values.marketData.interval | quote }}
             - name: STREAM_SPEED_SEC
-              value: {{ .Values.generator.config.streamSpeedSec | quote }}
+              value: {{ .Values.marketData.streamSpeedSec | quote }}
           resources:
             {{- toYaml .Values.generator.resources | nindent 12 }}
           readinessProbe:

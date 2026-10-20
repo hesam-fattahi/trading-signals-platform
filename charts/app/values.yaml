@@ -3,6 +3,13 @@ global:
   imageTag: dev
   imagePullPolicy: Always
 
+# Shared configuration for BFF and Generator services
+marketData:
+  ticker: BTC-USD
+  period: 5d
+  interval: 1m
+  streamSpeedSec: "0.2"
+
 kafka:
   bootstrap: trading-events-kafka-bootstrap.platform.svc.cluster.local:9092
   topics:
@@ -16,11 +23,6 @@ generator:
   image:
     repository: trading-generator
     tag: ""
-  config:
-    ticker: BTC-USD
-    period: 5d
-    interval: 1m
-    streamSpeedSec: "0.2"
   resources:
     requests:
       cpu: 100m
@@ -75,6 +77,20 @@ signal:
     tag: ""
   config:
     logLevel: info
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+bff:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: trading-bff
+    tag: ""
   resources:
     requests:
       cpu: 50m
