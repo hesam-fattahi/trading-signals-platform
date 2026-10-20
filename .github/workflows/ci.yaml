@@ -58,6 +58,7 @@ jobs:
 
   # ===========================================================================
   # Stage 2 — Tests. Parallel per language.
+  # Although no integration tests are written yet for any of the services
   # ===========================================================================
   test-go:
     name: test (go)
@@ -71,6 +72,27 @@ jobs:
           cache-dependency-path: |
             services/*/go.sum
             gen/go/go.sum
+
+      - name: Install protoc-gen-go
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.47.2"
+
+      - name: Regenerate proto stubs
+        run: make proto-generate
+
+      - name: Assert generated stubs are committed
+        run: |
+          if ! git diff --quiet gen/go; then
+            echo "::error::Generated stubs are out of date. Run 'make proto-generate' and commit."
+            git diff --stat gen/go
+            exit 1
+          fi
+
       - run: make go-test
 
   test-java:
@@ -129,13 +151,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
-
-      - uses: bufbuild/buf-setup-action@v1
-        with:
-          version: "1.47.2"
-
-      - name: Generate protobuf stubs
-        run: make proto-generate
 
       - name: Build ${{ matrix.service }} image
         run: make build-${{ matrix.service }}
