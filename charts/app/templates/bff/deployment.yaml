@@ -1,0 +1,44 @@
+{{- if .Values.bff.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bff
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bff
+spec:
+  replicas: {{ .Values.bff.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: bff
+  template:
+    metadata:
+      labels:
+        {{- include "app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: bff
+    spec:
+      containers:
+        - name: bff
+          image: {{ include "app.image" (dict "root" . "image" .Values.bff.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: KAFKA_BROKERS
+              value: {{ .Values.kafka.bootstrap | quote }}
+            - name: RAW_TICKS_TOPIC
+              value: {{ .Values.kafka.topics.rawTicks | quote }}
+            - name: INDICATORS_TOPIC
+              value: {{ .Values.kafka.topics.indicatorEvents | quote }}
+            - name: SIGNALS_TOPIC
+              value: {{ .Values.kafka.topics.signalEvents | quote }}
+          resources:
+            {{- toYaml .Values.bff.resources | nindent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+{{- end }}
