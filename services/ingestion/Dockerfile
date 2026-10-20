@@ -1,7 +1,7 @@
 # ==============================================================================
 # 1 - Build the Go binary
 # ==============================================================================
-FROM golang:1.27.1-alpine AS builder
+FROM golang:1.27.2-alpine AS builder
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/bin/ingestion ./c
 # ==============================================================================
 # 2 - Runtime image
 # ==============================================================================
-FROM alpine:3.20
+FROM alpine:3.24
 
 RUN apk --no-cache add ca-certificates
 
