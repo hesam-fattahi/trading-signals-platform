@@ -1,275 +1,59 @@
-# =============================================================================
-# Configuration
-# =============================================================================
-REGISTRY  := 192.168.56.10:5000
-TAG       := dev
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
 
-GENERATOR_DIR := services/generator
-INGESTION_DIR := services/ingestion
-INDICATOR_DIR := services/indicator-calculator
-SIGNAL_DIR := services/signal-decision
-
-GENERATOR_IMAGE := $(REGISTRY)/trading-generator:$(TAG)
-INGESTION_IMAGE := $(REGISTRY)/trading-ingestion:$(TAG)
-INDICATOR_IMAGE := $(REGISTRY)/trading-indicator-calculator:$(TAG)
-SIGNAL_IMAGE := $(REGISTRY)/trading-signal-decision:$(TAG)
-
-PLATFORM_NAMESPACE := platform
-PLATFORM_RELEASE   := platform
-PLATFORM_CHART     := charts/platform
-
-APP_NAMESPACE := default
-APP_RELEASE   := app
-APP_CHART     := charts/app
+# Include all modular sub-makefiles
+include makefiles/config.mk
+include makefiles/cluster.mk
+include makefiles/proto.mk
+include makefiles/go.mk
+include makefiles/python.mk
+include makefiles/java.mk
+include makefiles/js.mk
+include makefiles/docker.mk
+include makefiles/helm.mk
 
 # =============================================================================
 # Help
 # =============================================================================
-.PHONY: help
 help: ## Show this help
 	@echo "Trading signals platform — available targets:"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-	  awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 
 # =============================================================================
-# Protobuf (buf)
+# Composite flows
 # =============================================================================
-.PHONY: proto-generate
-proto-generate: ## Generate protobuf stubs (go) from .proto files
-	buf generate
+.PHONY: up
+up: cluster-up build-all load-all deploy-all ## Boot cluster, build images, deploy everything
+	@echo ""
+	@echo "Cluster is up. Access the UI at:"
+	@echo "  http://192.168.56.243"
+	@echo ""
 
-.PHONY: proto-lint
-proto-lint: ## Lint .proto files
-	buf lint
-
-.PHONY: proto-format
-proto-format: ## Format .proto files in place
-	buf format -w
-
-.PHONY: proto-format-check
-proto-format-check: ## Check .proto formatting (fails if not formatted)
-	@buf format -d --exit-code
-
-.PHONY: proto-breaking
-proto-breaking: ## Check .proto files for breaking changes against main
-	buf breaking --against '.git#branch=main'
-
-.PHONY: proto-check
-proto-check: proto-lint proto-format-check ## Run all proto checks
-
-.PHONY: proto-clean
-proto-clean: ## Remove generated proto output
-	rm -rf gen/go/trading
+.PHONY: down
+down: undeploy-all cluster-down ## Uninstall charts, destroy cluster
+	@echo ""
+	@echo "Cluster destroyed. Run 'make up' to start fresh."
 
 # =============================================================================
-# Go tooling (ingestion and signal-decision)
-# =============================================================================
-GO_MODULES := services/ingestion services/signal-decision gen/go
-
-.PHONY: fmt
-fmt: ## Format Go code in all modules
-	@for m in $(GO_MODULES); do \
-	  echo "==> fmt $$m"; \
-	  (cd $$m && gofmt -s -w .); \
-	done
-
-.PHONY: fmt-check
-fmt-check: ## Check Go formatting across all modules (fails if not formatted)
-	@failed=0; \
-	for m in $(GO_MODULES); do \
-	  out=$$(cd $$m && gofmt -s -l .); \
-	  if [ -n "$$out" ]; then \
-	    echo "Files not formatted in $$m:"; \
-	    echo "$$out"; \
-	    failed=1; \
-	  fi; \
-	done; \
-	if [ $$failed -eq 1 ]; then exit 1; fi
-
-.PHONY: vet
-vet: ## Run go vet on all Go modules
-	@for m in $(GO_MODULES); do \
-	  echo "==> vet $$m"; \
-	  (cd $$m && go vet ./...); \
-	done
-
-.PHONY: tidy
-tidy: ## Run go mod tidy on all Go modules
-	@for m in $(GO_MODULES); do \
-	  echo "==> tidy $$m"; \
-	  (cd $$m && go mod tidy); \
-	done
-
-.PHONY: download
-download: ## Download Go module dependencies for all modules
-	@for m in $(GO_MODULES); do \
-	  echo "==> download $$m"; \
-	  (cd $$m && go mod download); \
-	done
-
-.PHONY: test
-test: ## Run Go tests in all modules
-	@for m in $(GO_MODULES); do \
-	  echo "==> test $$m"; \
-	  (cd $$m && CGO_LDFLAGS="-lm" go test ./...); \
-	done
-
-.PHONY: lint
-lint: fmt-check vet ## Run Go linters
-
-.PHONY: check
-check: fmt-check vet test ## Run all Go checks
-
-# =============================================================================
-# Python (generator)
-# =============================================================================
-GENERATOR_VENV    := services/generator/venv
-GENERATOR_PYTHON  := $(GENERATOR_VENV)/bin/python
-GENERATOR_PIP     := $(GENERATOR_VENV)/bin/pip
-GENERATOR_PYFILES := $(shell find services/generator -name '*.py' -not -path '*/venv/*')
-
-.PHONY: python-venv
-python-venv: ## Create the generator virtualenv if it doesn't exist
-	@test -d $(GENERATOR_VENV) || python3 -m venv $(GENERATOR_VENV)
-	@$(GENERATOR_PIP) install --quiet --upgrade pip
-
-.PHONY: python-install
-python-install: python-venv ## Install generator dependencies into the venv
-	$(GENERATOR_PIP) install -r services/generator/requirements.txt
-
-.PHONY: python-lint
-python-lint: python-install ## Run ruff on the generator source
-	$(GENERATOR_VENV)/bin/ruff check services/generator
-
-.PHONY: python-format
-python-format: python-install ## Format generator source with ruff
-	$(GENERATOR_VENV)/bin/ruff format services/generator
-
-.PHONY: python-format-check
-python-format-check: python-install ## Check generator formatting (fails if not formatted)
-	$(GENERATOR_VENV)/bin/ruff format --check services/generator
-
-.PHONY: python-check
-python-check: python-lint python-format-check ## Run all Python checks
-
-# =============================================================================
-# Java tooling (indicator-calculator)
-# =============================================================================
-JAVA_MODULE := services/indicator-calculator
-
-.PHONY: fmt-java
-fmt-java: ## Format Java code with Spotless
-	cd $(JAVA_MODULE) && mvn -q spotless:apply
-
-.PHONY: fmt-check-java
-fmt-check-java: ## Check Java formatting
-	cd $(JAVA_MODULE) && mvn -q spotless:check
-
-.PHONY: spotbugs-java
-spotbugs-java: ## Run SpotBugs on Java code
-	cd $(JAVA_MODULE) && mvn -q compile spotbugs:check
-
-.PHONY: sec-java
-sec-java: ## Scan Java dependencies for CVEs
-	cd $(JAVA_MODULE) && mvn -q org.owasp:dependency-check-maven:check \
-		-DfailBuildOnCVSS=7
-
-.PHONY: test-java
-test-java: ## Run Java tests
-	cd $(JAVA_MODULE) && mvn -q test
-
-.PHONY: check-java
-check-java: fmt-check-java spotbugs-java test-java ## Run all Java checks
-
-
-# =============================================================================
-# Aggregating all the checks
+# Aggregated checks — CI entrypoint
 # =============================================================================
 .PHONY: check-all
-check-all: proto-check python-check check-java check ## Run all proto, Python, Java and Go checks
+check-all: proto-check python-check java-check js-check go-check ## Run all checks (CI)
+
+.PHONY: check-quick
+check-quick: proto-check go-fmt-check java-fmt-check js-typecheck ## Fast checks only (no tests)
 
 # =============================================================================
-# Build images (buildx → local Docker daemon)
+# Cleanup
 # =============================================================================
-.PHONY: build-generator
-build-generator: ## Build the generator image locally
-	docker buildx build \
-		--file $(GENERATOR_DIR)/Dockerfile \
-		--tag $(GENERATOR_IMAGE) \
-		--load \
-		$(GENERATOR_DIR)
-
-.PHONY: build-ingestion
-build-ingestion: ## Build the ingestion image locally
-	docker buildx build \
-		--file $(INGESTION_DIR)/Dockerfile \
-		--tag $(INGESTION_IMAGE) \
-		--load \
-		.
-
-.PHONY: build-indicator
-build-indicator: ## Build the indicator calculator image locally
-	docker buildx build \
-		--file $(INDICATOR_DIR)/Dockerfile \
-		--tag $(INDICATOR_IMAGE) \
-		--load \
-		.
-
-.PHONY: build-signal
-build-signal: ## Build the signal-decision image locally
-	docker buildx build \
-		--file $(SIGNAL_DIR)/Dockerfile \
-		--tag $(SIGNAL_IMAGE) \
-		--load \
-		.
-
-.PHONY: build-all
-build-all: build-generator build-ingestion build-indicator build-signal ## Build all images locally
-
-# =============================================================================
-# Load images (push to the local registry)
-# =============================================================================
-.PHONY: load-generator
-load-generator: build-generator ## Build and push the generator image
-	docker push $(GENERATOR_IMAGE)
-
-.PHONY: load-ingestion
-load-ingestion: build-ingestion ## Build and push the ingestion image
-	docker push $(INGESTION_IMAGE)
-
-.PHONY: load-indicator
-load-indicator: build-indicator ## Build and push the indicator calculator image
-	docker push $(INDICATOR_IMAGE)
-
-.PHONY: load-signal
-load-signal: build-signal ## Build and push the signal-decision image
-	docker push $(SIGNAL_IMAGE)
-
-.PHONY: load-all
-load-all: load-generator load-ingestion load-indicator load-signal ## Build and push all images
-
-# =============================================================================
-# Platform chart (Kafka + Strimzi + topics)
-# =============================================================================
-.PHONY: platform-install
-platform-install: ## Install or upgrade the platform chart
-	helm upgrade --install $(PLATFORM_RELEASE) $(PLATFORM_CHART) \
-		-n $(PLATFORM_NAMESPACE) --create-namespace
-
-.PHONY: platform-uninstall
-platform-uninstall: ## Uninstall the platform chart
-	helm uninstall $(PLATFORM_RELEASE) -n $(PLATFORM_NAMESPACE)
-
-# =============================================================================
-# App chart (Everything except generator and Kafka)
-# =============================================================================
-.PHONY: app-install
-app-install: ## Install or upgrade the app chart
-	helm upgrade --install $(APP_RELEASE) $(APP_CHART) \
-		-n $(APP_NAMESPACE) --create-namespace
-
-.PHONY: app-uninstall
-app-uninstall: ## Uninstall the app chart
-	helm uninstall $(APP_RELEASE) -n $(APP_NAMESPACE)
+.PHONY: clean
+clean: ## Remove build artifacts across all services
+	rm -rf gen/go/trading
+	rm -rf services/generator/venv
+	rm -rf services/indicator-calculator/target
+	rm -rf services/frontend/node_modules services/frontend/dist services/frontend/.vite
+	@for m in $(GO_MODULES); do \
+	  echo "==> clean $$m"; (cd $$m && go clean); \
+	  done
