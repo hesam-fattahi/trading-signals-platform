@@ -9,11 +9,11 @@ WORKDIR /app
 
 COPY proto/ /proto/
 
-COPY services/indicator-calculator-java/pom.xml /app/pom.xml
+COPY services/indicator-calculator/pom.xml /app/pom.xml
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -q dependency:go-offline
 
-COPY services/indicator-calculator-java/src/ /app/src/
+COPY services/indicator-calculator/src/ /app/src/
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -q package -DskipTests
 
