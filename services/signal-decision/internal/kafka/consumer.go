@@ -28,7 +28,7 @@ func NewConsumer(brokers, topic, groupID string, logger *slog.Logger) *Ingress {
 			Brokers:     []string{brokers},
 			Topic:       topic,
 			GroupID:     groupID,
-			StartOffset: kafka.FirstOffset,
+			StartOffset: kafka.LastOffset,
 			MinBytes:    1,
 			MaxBytes:    10e6,
 			Dialer: &kafka.Dialer{
