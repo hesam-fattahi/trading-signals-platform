@@ -5,7 +5,7 @@ js-install: ## Install frontend dependencies (npm ci)
 js-dev: ## Start the Vite dev server
 	cd $(JS_DIR) && $(JS_NPM) run dev
 
-js-build: ## Build the production bundle
+js-build: js-install ## Build the production bundle
 	cd $(JS_DIR) && $(JS_NPM) run build
 
 js-typecheck: js-install ## Run TypeScript type checking (tsc --noEmit)
