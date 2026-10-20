@@ -36,15 +36,7 @@ func (s *StrategyEngine) Evaluate(event *tradingv1.IndicatorEvent) (*tradingv1.S
 		s.states[symbol] = ctx
 	}
 
-	// Warm-up: first bar for this symbol. Save RSI and produce nothing.
-	if !ctx.HasPrev {
-		ctx.PrevRSI = event.Rsi
-		ctx.HasPrev = true
-		return nil, false
-	}
-
 	currentRSI := event.Rsi
-	prevRSI := ctx.PrevRSI
 
 	action := tradingv1.SignalAction_SIGNAL_ACTION_HOLD
 	actionTriggered := false
@@ -78,9 +70,9 @@ func (s *StrategyEngine) Evaluate(event *tradingv1.IndicatorEvent) (*tradingv1.S
 		// ==========================================
 		isUptrend := event.DiPlus > event.DiMinus
 		isPullbackZone := event.Close <= event.BollingerMiddle
-		rsiCrossedUp := prevRSI <= 50 && currentRSI > 50
+		rsiBullish := currentRSI > 50
 
-		if isUptrend && isPullbackZone && rsiCrossedUp {
+		if isUptrend && isPullbackZone && rsiBullish {
 			ctx.State = StateLong
 			action = tradingv1.SignalAction_SIGNAL_ACTION_LONG_ENTRY
 			actionTriggered = true
@@ -90,18 +82,15 @@ func (s *StrategyEngine) Evaluate(event *tradingv1.IndicatorEvent) (*tradingv1.S
 			// ==========================================
 			isDowntrend := event.DiMinus > event.DiPlus
 			isRallyZone := event.Close >= event.BollingerMiddle
-			rsiCrossedDown := prevRSI >= 50 && currentRSI < 50
+			rsiBearish := currentRSI < 50
 
-			if isDowntrend && isRallyZone && rsiCrossedDown {
+			if isDowntrend && isRallyZone && rsiBearish {
 				ctx.State = StateShort
 				action = tradingv1.SignalAction_SIGNAL_ACTION_SHORT_ENTRY
 				actionTriggered = true
 			}
 		}
 	}
-
-	// Save this bar's RSI for next bar's crossover detection.
-	ctx.PrevRSI = currentRSI
 
 	if !actionTriggered {
 		return nil, false

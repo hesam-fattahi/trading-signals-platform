@@ -9,10 +9,8 @@ const (
 )
 
 type SymbolContext struct {
-	Symbol  string
-	State   PositionState
-	PrevRSI float64
-	HasPrev bool
+	Symbol string
+	State  PositionState
 }
 
 func ApplySignal(current PositionState, action string) PositionState {
