@@ -3,6 +3,7 @@ SHELL := /bin/bash
 
 # Include all modular sub-makefiles
 include makefiles/config.mk
+include makefiles/tools.mk
 include makefiles/cluster.mk
 include makefiles/proto.mk
 include makefiles/go.mk
