@@ -141,10 +141,17 @@ public final class IndicatorApp {
               .build();
 
       ctx.forward(new Record<>(symbol, event, record.timestamp()));
-      log.info("produced indicator symbol={} close={} bb_upper={} bb_middle={} bb_lower={} rsi={} adx={} di+={} di-={}",
-          symbol, bar.getClose(),
-          bb[0], bb[1], bb[2],
-          rsi, adxResult[0], adxResult[1], adxResult[2]);
+      log.info(
+          "produced indicator symbol={} close={} bb_upper={} bb_middle={} bb_lower={} rsi={} adx={} di+={} di-={}",
+          symbol,
+          bar.getClose(),
+          bb[0],
+          bb[1],
+          bb[2],
+          rsi,
+          adxResult[0],
+          adxResult[1],
+          adxResult[2]);
     }
   }
 }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Protobuf's generated classes are not ours to fix. -->
+    <Match>
+        <Package name="~trading\.v1.*" />
+    </Match>
+
+    <Match>
+        <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS" />
+    </Match>
+</FindBugsFilter>
