@@ -3,7 +3,7 @@
 # ==============================================================================
 # 1 - Build the JAR
 # ==============================================================================
-FROM maven:3.9-eclipse-temurin-21 AS builder
+FROM maven:3.9-eclipse-temurin-26 AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 # ==============================================================================
 # 2 - Runtime image
 # ==============================================================================
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 RUN apk add --no-cache --virtual .build-deps \
         gcc make musl-dev curl tar && \
