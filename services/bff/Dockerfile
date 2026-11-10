@@ -3,7 +3,7 @@
 # ==============================================================================
 # Stage 1: Build React Frontend
 # ==============================================================================
-FROM node:20-alpine AS frontend
+FROM node:26-alpine AS frontend
 WORKDIR /app
 
 # Copy package files for the frontend
@@ -17,7 +17,7 @@ RUN npm run build
 # ==============================================================================
 # Stage 2: Build Go BFF
 # ==============================================================================
-FROM golang:1.27.1-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 WORKDIR /app
 
 COPY . .
